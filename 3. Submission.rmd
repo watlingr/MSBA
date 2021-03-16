@@ -1,0 +1,226 @@
+---
+title: "Project 2"
+author: "Richard Watling"
+date: "3/15/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#drop (ID) and re-arrange for readability. Should be starting with 699 records.
+```{r}
+require(mlbench)
+data(BreastCancer)
+mydata <- cbind(BreastCancer[11],BreastCancer[2:10])
+```
+
+
+#correct for missing values by deleting entire rows containing an NA value. Should now have 683 records.
+```{r}
+mydata <-  na.omit(mydata)
+summary(mydata)
+```
+
+
+#keep as factor: (Class)
+```{r}
+str(mydata)
+```
+
+
+#convert to num: (Cl.thickness, Cell.shape, Marg.adhesion, Epith.c.size, Bare.nuclei, Bl.cromatin, Normal.nucleoli, Mitoses)
+#converting these variables to numeric values beforehand in order to prevent any issues arising when running the classification models.
+```{r}
+sapply(mydata, class)
+mydata$Cl.thickness <- as.numeric(as.factor(mydata$Cl.thickness))
+mydata$Cell.size <- as.numeric(as.factor(mydata$Cell.size))
+mydata$Cell.shape <- as.numeric(as.factor(mydata$Cell.shape))
+mydata$Marg.adhesion <- as.numeric(as.factor(mydata$Marg.adhesion))
+mydata$Epith.c.size <- as.numeric(as.factor(mydata$Epith.c.size))
+mydata$Bare.nuclei <- as.numeric(as.factor(mydata$Bare.nuclei))
+mydata$Bl.cromatin <- as.numeric(as.factor(mydata$Bl.cromatin))
+mydata$Normal.nucleoli <- as.numeric(as.factor(mydata$Normal.nucleoli))
+mydata$Mitoses <- as.numeric(as.factor(mydata$Mitoses))
+sapply(mydata, class)
+```
+
+
+#1. svm
+```{r}
+library(e1071)
+mysvm <- svm(Class ~ ., mydata)
+mysvm.pred <- predict(mysvm, mydata)
+table(mysvm.pred,mydata$Class)
+#mysvm.pred  benign malignant
+#benign       433         5
+#malignant     11       234
+```
+
+
+#2. NaiveBayes
+```{r}
+library(klaR)
+library(MASS)
+mynb <- NaiveBayes(Class ~ ., mydata)
+mynb.pred <- predict(mynb,mydata)
+table(mynb.pred$class,mydata$Class)
+#            benign malignant
+#benign       424         5
+#malignant     20       234
+```
+
+
+#3. Neural Networks
+```{r}
+library(nnet)
+mynnet <- nnet(Class ~ ., mydata, size=1)
+mynnet.pred <- predict(mynnet,mydata,type="class")
+table(mynnet.pred,mydata$Class)
+#note that this one will always change
+#mynnet.pred benign malignant
+#benign       434         6
+#malignant     10       233
+```
+
+
+#4. Decision trees
+```{r}
+library(rpart)
+mytree <- rpart(Class ~ ., mydata)
+plot(mytree); text(mytree)
+summary(mytree)
+mytree.pred <- predict(mytree,mydata,type="class")
+table(mytree.pred,mydata$Class)
+#mytree.pred benign malignant
+#benign       431         9
+#malignant     13       230
+```
+
+
+#5. Leave-1-Out Cross Validation (LOOCV)
+```{r}
+ans <- numeric(length(mydata[,1]))
+for (i in 1:length(mydata[,1])) {
+  mytree <- rpart(Class ~ ., mydata[-i,])
+  mytree.pred <- predict(mytree,mydata[i,],type="class")
+  ans[i] <- mytree.pred}
+ans <- factor(ans,labels=levels(mydata$Class))
+table(ans,mydata$Class)
+#ans         benign malignant
+#benign       431        24
+#malignant     13       215
+```
+
+
+#6. Quadratic Discriminant Analysis
+```{r}
+library(MASS)
+myqda <- qda(Class ~ ., mydata)
+myqda.pred <- predict(myqda, mydata)
+table(myqda.pred$class,mydata$Class)
+#            benign malignant
+#benign       422         6
+#malignant     22       233
+```
+
+
+#7. Regularized Discriminant Analysis
+```{r}
+library(klaR)
+myrda <- rda(Class ~ ., mydata)
+myrda.pred <- predict(myrda, mydata)
+table(myrda.pred$class,mydata$Class)
+#note that this one will always change
+#            benign malignant
+#benign       435        10
+#malignant      9       229
+```
+
+
+#8. Random Forests
+```{r}
+library(randomForest)
+myrf <- randomForest(Class ~ .,mydata)
+myrf.pred <- predict(myrf, mydata)
+table(myrf.pred, mydata$Class)
+#myrf.pred   benign malignant
+#benign       444         0
+#malignant      0       239
+```
+
+
+#------------------------------------------------------------------------------
+
+
+#create a data frame of all the .pred variables created.
+```{r}
+df.1 <- data.frame(mysvm.pred, mynb.pred$class, mynnet.pred, mytree.pred, ans, myqda.pred$class, myrda.pred$class, myrf.pred)
+View(df.1)
+```
+
+
+#convert mynnet.pred to factor similar to the rest of the variables for uniform steps in later tasks.
+```{r}
+str(df.1)
+df.1$mynnet.pred <- as.factor(as.character(df.1$mynnet.pred))
+```
+
+
+#convert the categorical variables to binary 0, 1 values. Will be considered factors which needs to be changed, they should be numeric.
+#benign = 0
+#malignant = 1
+```{r}
+levels(df.1$mysvm.pred) <- c(0,1)
+levels(df.1$mynb.pred.class) <- c(0,1)
+levels(df.1$mynnet.pred) <- c(0,1)
+levels(df.1$mytree.pred) <- c(0,1)
+levels(df.1$ans) <- c(0,1)
+levels(df.1$myqda.pred.class) <- c(0,1)
+levels(df.1$myrda.pred.class) <- c(0,1)
+levels(df.1$myrf.pred) <- c(0,1)
+View(df.1)
+```
+
+
+#convert binary 0, 1 factors to numeric in order to utilize rowsSums formula.
+```{r}
+df.1$mysvm.pred <- as.numeric(as.factor(df.1$mysvm.pred)) -1
+df.1$mynb.pred.class <- as.numeric(as.factor(df.1$mynb.pred.class)) -1
+df.1$mynnet.pred <- as.numeric(as.factor(df.1$mynnet.pred)) -1
+df.1$mytree.pred <- as.numeric(as.factor(df.1$mytree.pred)) -1
+df.1$ans <- as.numeric(as.factor(df.1$ans)) -1
+df.1$myqda.pred.class <- as.numeric(as.factor(df.1$myqda.pred.class)) -1
+df.1$myrda.pred.class <- as.numeric(as.factor(df.1$myrda.pred.class)) -1
+df.1$myrf.pred <- as.numeric(as.factor(df.1$myrf.pred)) -1
+str(df.1)
+```
+
+
+```{r}
+#test rowsSums formula.
+rowSums(df.1)
+```
+
+
+#incorporate an ifelse with the rowSums formula to create a Majority Rule Ensemble (new vairable called "majority_classification").
+```{r}
+majority_classification <- ifelse(rowSums(df.1)>4, "malignant", "benign")
+View(majority_classification)
+table(majority_classification)
+```
+
+
+#compare majority_classification with the original and true data.
+```{r}
+table(majority_classification,mydata$Class)
+#majority_classification benign malignant
+#benign       433         6
+#malignant     11       233
+```
+
+#Some of the models appeared to have performed better independent from the majority classification model; these included the SVM, Neural Network, and Decision Forest models. However, combining eight classification models did in fact prove to provide better results than most of the other classification models alone did, so it would be beneficial to use the majority classification model with this dataset.
